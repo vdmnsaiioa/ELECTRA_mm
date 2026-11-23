@@ -25,15 +25,15 @@
 SCRIPT=train2.py              # train.py (energy only) | train2.py (energy + density)
 
 SEED=202
-lr_id='normal'                # 'normal' (4e-6) | 'fine' (1e-7); sets lr_normal/lr_fine in the run name
+lr_id='normal'
 INITIAL_LR=4e-6
 FINAL_LR=4e-6
-DATA_SPLIT=mpfull2025         # mpfull2025 | mp50%2025 | mp10%2025 | mp1%2025
-LOAD_MODEL_PATH=              # checkpoint to resume from (relative to the repo root); empty = train from scratch
-USE_FRACTION_OF_DENSITY=false # false = 100% density; true = only INDICES_FOR_DENSITY get density loss
-DENSITY_FRACTION=
-INDICES_FOR_DENSITY=          # indices_10pct.json | indices_1pct.json (in data_splits/density_indices/)
-PREV_EPOCHS=                  # epochs finished by the run being resumed (adds prev<N>ep to the run name)
+DATA_SPLIT=mpfull2025
+LOAD_MODEL_PATH="/home/scratch3/s234633/ELECTRA/trained_models/ELECTRA_2026-11-21_mt_mpfull_dens100%_lr_normal_seed202_prev12ep_lyric-valley-497.model_state_dict"
+USE_FRACTION_OF_DENSITY=false
+DENSITY_FRACTION=1
+#INDICES_FOR_DENSITY=indices_10pct.json
+PREV_EPOCHS=14                 # epochs finished by the run being resumed (adds prev<N>ep to the run name)
 # ----------------------------------------------------------------------------
 
 # Run from the directory the job was submitted from (the repo root).
