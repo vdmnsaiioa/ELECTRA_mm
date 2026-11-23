@@ -4,3 +4,9 @@
 /data_splits/atomization.csv
 /.idea
 /gaussian_positions/
+# Training outputs (train2.py / sbatches/train_mm.sh)
+/logs/*
+!/logs/.gitkeep
+/wandb_runs/
+/wandb/
+/split_*/

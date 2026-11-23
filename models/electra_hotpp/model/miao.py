@@ -226,19 +226,22 @@ class MiaoNet(AtomicModule):
         self.units = hidden_nodes[0]
         self.init_aoi_linear = FixedLinearTransformVector(output_dim=self.units, freeze=True)
         self.init_tensors_linear = FixedLinearTransformTensor(input_dim=5, output_dim=self.units, freeze=True)
+        self.energy_readout_node_infos = []
 
     def calculate(self,
                   batch_data : Dict[str, torch.Tensor]
                   ) -> Dict[str, torch.Tensor]:
         node_info, edge_info, init_embed, aoi, symmetries = self.get_init_info(batch_data)
-        mol_ID = ''.join(map(str, batch_data['atomic_number'].tolist()))
+        # (removed unused mol_ID = ...tolist(): it forced a GPU->CPU sync every forward)
         #plot_gaussian_arrows(batch_data['coordinate'], node_info[1],f"AA_temp_pos_plots/initial_gaussian_arrows_{mol_ID}.html")
         n_units = node_info[0].shape[1]
 
+        energy_readout_node_infos = []
         for i, en_equivalent in enumerate(self.en_equivalent_blocks):
             node_info, edge_info = en_equivalent(node_info, edge_info, batch_data)
             if self.prune:
                 node_info = self.prune_nodes(node_info, i, n_units, batch_data, block=True)
+            energy_readout_node_infos.append(node_info[0])
         #plot_gaussian_arrows(batch_data['coordinate'], node_info[1],f"AA_temp_pos_plots/gaus_ar_block_{i}_{mol_ID}.html")
         ni_1, ei_1 = ({i: node_info[i] for i in node_info.keys()},
                         {i: edge_info[i] for i in edge_info.keys()})
@@ -253,6 +256,8 @@ class MiaoNet(AtomicModule):
         node_info_1, edge_info_1 = self.block_heads[0](ni_1, ei_1, batch_data)
         if self.prune:
             node_info_1 = self.prune_nodes(node_info_1, 0, n_units, batch_data, block=False)
+        energy_readout_node_infos.append(node_info_1[0])
+        self.energy_readout_node_infos = energy_readout_node_infos
 
         ## 2ND HEAD
         node_info_2, edge_info_2 = self.block_heads[1](ni_2, ei_2, batch_data)
@@ -315,7 +320,8 @@ class MiaoNet(AtomicModule):
         n_tensors = l2_tensor.shape[1]
         emb_l1 = torch.zeros(n_atoms, emb_dim, 3, device=emb.device, dtype=emb.dtype)
         emb_l2 = torch.zeros(n_atoms, emb_dim, 3, 3, device=emb.device, dtype=emb.dtype)
-        if batch_data["offset"].sum() != 0:
+        offset_nonzero = batch_data["_offset_sum_nonzero"] if "_offset_sum_nonzero" in batch_data else bool(batch_data["offset"].sum() != 0)
+        if offset_nonzero:
             cell_vectors = batch_data['cell'].view(1, 3, 3)
             cell_vectors = cell_vectors.repeat(n_atoms, 1, 1)
             emb_l1[:, :n_ax_oi, :] = cell_vectors / torch.norm(cell_vectors, dim=-1, keepdim=True)
@@ -402,7 +408,7 @@ class MiaoNet(AtomicModule):
     def split_batch_tensor(self, tensor, weights):
         n_atoms, n_units = tensor.shape[0], tensor.shape[1]
 
-        scalar_part = (torch.vmap(torch.trace)(tensor.reshape(-1, 3, 3)) / 3).reshape(n_atoms, n_units, 1, 1) * torch.eye(3, device=tensor.device).unsqueeze(0).unsqueeze(0).expand(n_atoms, n_units, -1, -1)
+        scalar_part = (torch.diagonal(tensor.reshape(-1, 3, 3), dim1=-2, dim2=-1).sum(-1) / 3).reshape(n_atoms, n_units, 1, 1) * torch.eye(3, device=tensor.device).unsqueeze(0).unsqueeze(0).expand(n_atoms, n_units, -1, -1)
         scalar_part = self.normalize_matrix(scalar_part) *  weights[:, 0:n_units][:, :, None, None]
 
         skew_part = (1 / 2) * (tensor - torch.transpose(tensor, -1, -2))
@@ -480,7 +486,8 @@ class MiaoNet(AtomicModule):
         n_atoms   = positions.shape[0]
         r = positions.unsqueeze(1) - positions.unsqueeze(0)  # (n,n,3)
 
-        if (batch_data["offset"] != 0).sum() != 0:
+        offset_nonzero = batch_data["_offset_any_nonzero"] if "_offset_any_nonzero" in batch_data else bool((batch_data["offset"] != 0).sum() != 0)
+        if offset_nonzero:
             cell     = batch_data["cell"].view(3, 3)
             cell_inv = torch.inverse(cell)
 
