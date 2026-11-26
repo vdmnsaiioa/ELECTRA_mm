@@ -65,6 +65,12 @@ echo "Job $SLURM_JOB_ID on partition $SLURM_JOB_PARTITION, time limit $(squeue -
 
 # Run from the directory the job was submitted from (the repo root).
 cd "${SLURM_SUBMIT_DIR:-$(pwd)}" || exit 1
+# Checkpoints (~3 GB, rewritten every epoch) go to trained_models/. Heavy writes
+# on the /home/energy fileserver get jobs killed, so it must be a symlink to scratch.
+if [[ "$(pwd -P)" == /home/energy/* ]] && [ ! -L trained_models ]; then
+    echo "trained_models/ is not a symlink to scratch; run scripts/setup_niflheim.sh first." >&2
+    exit 1
+fi
 
 # KeOps needs the CUDA libraries; without them it falls back to CPU and segfaults.
 # el8 nodes have CUDA/12.1.1, el9 nodes only CUDA/12.9.1.
@@ -83,12 +89,15 @@ conda activate "$CONDA_ENV"
 # Don't let wandb copy stdout into output.log/.wandb; the Slurm log still has it.
 export WANDB_CONSOLE=off
 
+# Validation CHGCAR/delta/HTML outputs go to scratch, not the repo on /home/energy.
+export ELECTRA_OUTPUT_BASE=${ELECTRA_OUTPUT_BASE:-/home/scratch3/$USER/ELECTRA/}
+
 # Keep wandb's local run files on the node's own disk, not /home/energy. Heavy
 # I/O on the group fileserver gets jobs killed. Metrics still sync to wandb.ai;
-# the local copy is moved to /home/scratch3/$USER/ELECTRA/wandb_runs (or $ELECTRA_OUTPUT_BASE) when the job ends.
+# the local copy is moved to $ELECTRA_OUTPUT_BASE/wandb_runs when the job ends.
 export WANDB_DIR=${TMPDIR:-/tmp}/wandb_${SLURM_JOB_ID:-$$}
 mkdir -p "$WANDB_DIR"
-trap 'mkdir -p ${ELECTRA_OUTPUT_BASE:-/home/scratch3/$USER/ELECTRA/}wandb_runs && cp -r "$WANDB_DIR"/wandb/* ${ELECTRA_OUTPUT_BASE:-/home/scratch3/$USER/ELECTRA/}wandb_runs/ 2>/dev/null; rm -rf "$WANDB_DIR"' EXIT
+trap 'mkdir -p ${ELECTRA_OUTPUT_BASE}wandb_runs && cp -r "$WANDB_DIR"/wandb/* ${ELECTRA_OUTPUT_BASE}wandb_runs/ 2>/dev/null; rm -rf "$WANDB_DIR"' EXIT
 
 echo "Running $SCRIPT ${ARGS[*]}"
 python3 "$SCRIPT" "${ARGS[@]}"

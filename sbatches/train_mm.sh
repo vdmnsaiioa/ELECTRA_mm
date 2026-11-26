@@ -38,6 +38,12 @@ PREV_EPOCHS=14                 # epochs finished by the run being resumed (adds 
 
 # Run from the directory the job was submitted from (the repo root).
 cd "${SLURM_SUBMIT_DIR:-$(pwd)}" || exit 1
+# Checkpoints (~3 GB, rewritten every epoch) go to trained_models/. Heavy writes
+# on the /home/energy fileserver get jobs killed, so it must be a symlink to scratch.
+if [[ "$(pwd -P)" == /home/energy/* ]] && [ ! -L trained_models ]; then
+    echo "trained_models/ is not a symlink to scratch; run scripts/setup_niflheim.sh first." >&2
+    exit 1
+fi
 if [ ! -f "$SCRIPT" ]; then
     echo "$SCRIPT not found in $(pwd); submit this script from the repo root." >&2
     exit 1
@@ -81,14 +87,13 @@ export WANDB_CONSOLE=off
 # Log to a shared wandb team instead of your personal account:
 # export WANDB_ENTITY=<team-name>
 
-# Optional: put validation outputs (CHGCARs, deltas, HTML plots) on a scratch
-# disk instead of the repo. Heavy writes on a shared home filesystem can get
-# jobs killed.
-# export ELECTRA_OUTPUT_BASE=/path/to/scratch/ELECTRA/
+# Validation outputs (CHGCARs, deltas, HTML plots) go to a scratch disk, not the
+# repo. Heavy writes on a shared home filesystem can get jobs killed.
+export ELECTRA_OUTPUT_BASE=${ELECTRA_OUTPUT_BASE:-/home/scratch3/$USER/ELECTRA/}
 
 # Keep wandb's local run files on the node's own disk. Metrics still sync to
 # wandb.ai; the local copy is moved to WANDB_RUNS_DIR when the job ends.
-WANDB_RUNS_DIR=${WANDB_RUNS_DIR:-$(pwd)/wandb_runs}
+WANDB_RUNS_DIR=${WANDB_RUNS_DIR:-${ELECTRA_OUTPUT_BASE}wandb_runs}
 export WANDB_DIR=${TMPDIR:-/tmp}/wandb_${SLURM_JOB_ID:-$$}
 mkdir -p "$WANDB_DIR"
 trap 'mkdir -p "$WANDB_RUNS_DIR" && cp -r "$WANDB_DIR"/wandb/* "$WANDB_RUNS_DIR"/ 2>/dev/null; rm -rf "$WANDB_DIR"' EXIT

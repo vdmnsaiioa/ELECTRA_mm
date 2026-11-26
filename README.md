@@ -31,8 +31,11 @@ too big for the repo stays outside it, with Niflheim defaults:
 | Validation outputs, wandb run files | `/home/scratch3/$USER/ELECTRA/` (set in the job scripts) | `ELECTRA_OUTPUT_BASE` |
 | Conda environment | `electra_env` (by name; `conda` must be on `PATH`) | `CONDA_ENV` (a name or a path) |
 
-Checkpoints are written to `trained_models/` every epoch. Resume/finetune job
-scripts load specific checkpoints by absolute path (`LOAD_MODEL_PATH`).
+Checkpoints (~3 GB) are rewritten in `trained_models/` every epoch. On
+`/home/energy` the training job scripts refuse to start unless `trained_models`
+is a symlink to scratch (made by `scripts/setup_niflheim.sh`); heavy writes on
+that fileserver have gotten jobs killed. Resume/finetune job scripts load
+specific checkpoints by absolute path (`LOAD_MODEL_PATH`).
 
 ### Setup (once per clone)
 

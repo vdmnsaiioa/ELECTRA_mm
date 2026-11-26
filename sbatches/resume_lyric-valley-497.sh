@@ -67,6 +67,12 @@ echo "Job $SLURM_JOB_ID on partition $SLURM_JOB_PARTITION, time limit $(squeue -
 
 # Run from the directory the job was submitted from (the repo root).
 cd "${SLURM_SUBMIT_DIR:-$(pwd)}" || exit 1
+# Checkpoints (~3 GB, rewritten every epoch) go to trained_models/. Heavy writes
+# on the /home/energy fileserver get jobs killed, so it must be a symlink to scratch.
+if [[ "$(pwd -P)" == /home/energy/* ]] && [ ! -L trained_models ]; then
+    echo "trained_models/ is not a symlink to scratch; run scripts/setup_niflheim.sh first." >&2
+    exit 1
+fi
 
 # KeOps needs the CUDA libraries; without them it falls back to CPU and segfaults.
 # el8 nodes have CUDA/12.1.1, el9 nodes only CUDA/12.9.1.
