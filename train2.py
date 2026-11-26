@@ -10,38 +10,11 @@ from lightning.pytorch import seed_everything
 from utils.model_handling import ModelIO, get_tag
 from utils.train_helper_funcs import set_all_seeds, set_all_paths, get_files, add_run_override_args, apply_run_overrides, get_run_name_prefix
 from utils.eq_check import equivariance_check
+from utils.paths import REPO_ROOT, resolve_config_paths, apply_output_base
 from models.electra_hotpp.ELECTRA_mm import ELECTRA
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# Root of this repository. Relative paths in the YAML config are taken relative
-# to it, so the code runs from any clone without editing absolute paths.
-REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
-
-# Config keys that hold file or directory paths. Keys used with string
-# concatenation (path + "name") keep their trailing slash.
-PATH_KEYS = ("data_split_path", "energy_csv", "hotpp_csv_dir", "hpc_base_path",
-             "niflheim_base_path", "model_dir", "bad_files_path",
-             "rad_cosine_log_path", "load_model_path")
-
-# QM9 densities are too big for the repo. Set ELECTRA_QM9_PATH to use another copy;
-# otherwise qm9_dens_path from the YAML is used.
-QM9_PATH_ENV = "ELECTRA_QM9_PATH"
-
-
-def resolve_config_paths(config: dict, base: str = REPO_ROOT) -> dict:
-    """Turn relative paths in ``config`` into absolute ones under ``base``."""
-    if os.environ.get(QM9_PATH_ENV):
-        config["qm9_dens_path"] = os.environ[QM9_PATH_ENV]
-    for key in PATH_KEYS:
-        value = config.get(key)
-        if not isinstance(value, str) or not value or os.path.isabs(value):
-            continue
-        resolved = os.path.normpath(os.path.join(base, value))
-        if value.endswith("/"):
-            resolved += "/"
-        config[key] = resolved
-    return config
 
 
 
@@ -135,10 +108,8 @@ def run():
     if config.get("load_model_path") and not os.path.isabs(config["load_model_path"]):
         config["load_model_path"] = os.path.abspath(config["load_model_path"])
     # Optional: put validation/test outputs (CHGCARs, deltas, HTML plots) somewhere
-    # other than the repo, e.g. a scratch disk. Heavy writes on a shared home
-    # filesystem can get jobs killed.
-    if os.environ.get("ELECTRA_OUTPUT_BASE"):
-        config['niflheim_base_path'] = os.environ["ELECTRA_OUTPUT_BASE"].rstrip("/") + "/"
+    # other than the repo (ELECTRA_OUTPUT_BASE), e.g. a scratch disk.
+    config = apply_output_base(config)
     print(config)
 
     # Seed alignment

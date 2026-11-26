@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 import yaml
 
+from utils.paths import resolve_config_paths, apply_output_base
 from utils.train_helper_funcs import get_files, set_all_paths, set_all_seeds
 
 
@@ -34,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--config",
-        default="hpc_conf_mol_mm.yaml",
+        default="hpc_conf_mol_mm_extra.yaml",
         help="Path to YAML config containing multimodal checkpoint settings.",
     )
     parser.add_argument(
@@ -77,7 +78,8 @@ def load_validation_config(config_path: str | os.PathLike[str]) -> dict:
 
     config["wandb"] = False
     config["save_model"] = False
-    return config
+    # Relative paths in the config are relative to the repo root.
+    return apply_output_base(resolve_config_paths(config))
 
 
 def evaluate_loaded_model_on_validation(
@@ -140,6 +142,18 @@ def evaluate_loaded_model_on_validation(
             squared_error = torch.square(error).item()
 
             sample_name = mol_cd_file if mol_cd_file is not None else f"validation_{batch_idx}"
+            chemical_formula = (
+                qm9_mol.get_chemical_formula()
+                if hasattr(qm9_mol, "get_chemical_formula")
+                else "unknown"
+            )
+            target_energy_value = target_energy_tensor.detach().cpu().item()
+            predicted_energy_value = predicted_energy.detach().cpu().item()
+            print(
+                f"{sample_name}: idx={batch_idx}, formula={chemical_formula}, "
+                f"target_energy={target_energy_value}, predicted_energy={predicted_energy_value}",
+                flush=True,
+            )
             print(f"{sample_name}: |target energy - estimated energy| = {abs_error}", flush=True)
             print(f"{sample_name}: (target energy - estimated energy)^2 = {squared_error}", flush=True)
 

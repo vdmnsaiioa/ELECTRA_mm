@@ -1,7 +1,7 @@
-load_model_path: /home/energy/s234633/ELECTRA/trained_models/ELECTRA_2026-07-04_elated-firebrand-293.model_state_dict
-energy_csv: /home/energy/s234633/ELECTRA/data_splits/energies.csv
+load_model_path: /home/scratch3/s234633/ELECTRA/trained_models/ELECTRA_2026-07-04_comfy-haze-292.model_state_dict
+energy_csv: data_splits/energies.csv
 data_split: "mpfull2025"
-data_split_path: /home/energy/s234633/ELECTRA/data_splits/
+data_split_path: data_splits/
 qm9_dens_path: /home/scratch3/jels/QM9_Full
 
 pbc: False
@@ -9,7 +9,7 @@ hotpp_cutoff: 8
 seed: 0
 wandb: True 
 project_name: electra3
-model_dir: /home/energy/s234633/ELECTRA/trained_models
+model_dir: trained_models
 
 loss_type: normal
 loss_coef: 10

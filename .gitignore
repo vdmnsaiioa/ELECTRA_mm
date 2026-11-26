@@ -1,12 +1,27 @@
 /QM9_Densities/
 /density_deltas/
-/trained_models/
+/trained_models
+/trained_interesting_models
 /data_splits/atomization.csv
 /.idea
 /gaussian_positions/
-# Training outputs (train2.py / sbatches/train_mm.sh)
+__pycache__/
+*.pyc
+.DS_Store
+
+# Training/validation outputs (job scripts write these; keep the folders)
 /logs/*
 !/logs/.gitkeep
+/logs[0-9]*
+!/logs7/
+/logs7/*
+!/logs7/.gitkeep
+/logs_validation/*
+!/logs_validation/.gitkeep
 /wandb_runs/
 /wandb/
 /split_*/
+/pred_dens/*/
+/csvs2/
+*.model_state_dict
+*.pt

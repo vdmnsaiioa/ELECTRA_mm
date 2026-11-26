@@ -262,6 +262,10 @@ def get_run_name_prefix(config, multitask):
             pct = 100
         parts.append(f"dens{round(pct, 1):g}%")
 
+    else:
+        # Energy-only models come in two widths (64 / 100 ch); keep them apart.
+        parts.append(f"{config['hotpp_outdim']}ch")
+
     if config.get("lr_id") == "normal":
         parts.append("lr_normal")
     elif config.get("lr_id") == "fine":

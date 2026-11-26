@@ -51,8 +51,8 @@ def load_electra_mm_class():
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("hpc_conf_frozen.yaml"))
-    parser.add_argument("--epochs", type=int, default=200)
-    parser.add_argument("--lr", type=float, default=1.0e-3)
+    parser.add_argument("--epochs", type=int, default=70)
+    parser.add_argument("--lr", type=float, default=1.0e-5)
     parser.add_argument("--weight_decay", type=float, default=0.0)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--num_workers", type=int, default=0)
@@ -261,10 +261,17 @@ def evaluate_mae(base_model: nn.Module, readout: nn.Module, loader: DataLoader, 
     readout.eval()
     errors: list[torch.Tensor] = []
     with torch.no_grad():
-        for atoms, target, _key in loader:
+        for atoms, target, key in loader:
             features = molecule_features(base_model, atoms, config, device).unsqueeze(0)
             pred = readout(features).cpu()
-            errors.append(torch.abs(pred.view_as(target) - target))
+            error = torch.abs(pred.view_as(target) - target)
+            errors.append(error)
+
+            print(
+                f"key={key} pred={pred.item():.8f} target={target.item():.8f} error={error.item():.8f}",
+                flush=True,
+            )
+
     return torch.cat(errors).mean().item()
 
 
@@ -328,11 +335,19 @@ def main() -> None:
         val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.num_workers, collate_fn=collate_single)
 
         first_atoms, _target, _key = train_dataset[0]
-        feature_dim = molecule_features(base_model, first_atoms, config, device).numel()
+        featurSe_dim = molecule_features(base_model, first_atoms, config, device).numel()
 
     readout = nn.Sequential(
-        nn.Linear(feature_dim, 128),
+        nn.Linear(feature_dim, 256),
         nn.SiLU(),
+        nn.LayerNorm(256),
+        nn.Dropout(0.1),
+
+        nn.Linear(256, 128),
+        nn.SiLU(),
+        nn.LayerNorm(128),
+        nn.Dropout(0.1),
+
         nn.Linear(128, 1),
     ).to(device)
     optimizer = torch.optim.AdamW(readout.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -360,6 +375,7 @@ def main() -> None:
                 if base_model is None:
                     raise RuntimeError("base_model must be loaded when not using --feature_cache.")
                 features = molecule_features(base_model, atoms, config, device).unsqueeze(0)
+
             target = target.to(device)
             pred = readout(features)
 
@@ -395,22 +411,25 @@ def main() -> None:
         train_mae = float(np.mean(abs_errors))
         print(f"epoch={epoch:04d} train_mae={train_mae:.8f}", flush=True)
 
+        if cached_training:
+            val_mae = evaluate_cached_mae(readout, val_loader, device)
+        else:
+            if base_model is None:
+                raise RuntimeError("base_model must be loaded when not using --feature_cache.")
+            val_mae = evaluate_mae(base_model, readout, val_loader, config, device)
+
+        print(f"epoch={epoch:04d} validation_mae={val_mae:.8f}", flush=True)
+
         if wandb_run is not None:
             wandb_run.log(
                 {
                     "train_mae_epoch": train_mae,
+                    "validation_mae_epoch": val_mae,
                     "epoch": epoch,
                 },
                 step=global_step,
             )
 
-    if cached_training:
-        val_mae = evaluate_cached_mae(readout, val_loader, device)
-    else:
-        if base_model is None:
-            raise RuntimeError("base_model must be loaded when not using --feature_cache.")
-        val_mae = evaluate_mae(base_model, readout, val_loader, config, device)
-    print(f"validation_mae={val_mae:.8f}", flush=True)
     if wandb_run is not None:
         wandb_run.log({"validation_mae": val_mae})
         wandb_run.finish()
